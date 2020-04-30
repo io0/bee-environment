@@ -10,10 +10,13 @@ import gym
 from gym import spaces
 from gym.envs.classic_control import rendering
 from gym.utils import colorize, seeding, EzPickle
+from scipy.spatial.distance import cdist
 
 
-GRID = [10,10]
-HIVE = [4,4]
+GRID = [15,15]
+center = int(GRID[0]/2)
+HIVE = np.array([center,center])
+HIVE_RADIUS = 3
 PURPLE = (0.5,0.4,0.9)
 ORANGE =(1,0.7, 0.2)
 RED = (1,0,0)
@@ -27,7 +30,10 @@ class BeeEnv(gym.Env, EzPickle):
     def __init__(self, 
                  n_agents = 4, 
                  max_episode_steps = 200,
-                 logging=True):
+                 logging=True,
+                 fov=True,
+                 signaling=True,
+                 hive=HIVE):
         self.directions = np.array([
             [-1,0],  #left
             [0,1],  #up
@@ -38,24 +44,58 @@ class BeeEnv(gym.Env, EzPickle):
         self.viewer = None
         self.n_agents = n_agents
         self.action_space = [spaces.Discrete(5) for i in range(self.n_agents)]
+        self.fov = fov
+        self.fov_buffer = [[0,0]]*3
+        self.enable_signaling = signaling
         self.logging = logging
         self.flower = np.array([0,0])
+        self.hive = hive
         self.min_position = 0
-        self.max_position = GRID[0]
+        self.max_position = GRID[0] - 1
         self._max_episode_steps = max_episode_steps
         self.reset()
         
+    def _place_flower(self):
+        flower = np.array([np.random.randint(GRID[0]), np.random.randint(GRID[0])])
+        while (np.abs(flower - self.hive).sum() < 7):    
+            flower = np.array([np.random.randint(GRID[0]), np.random.randint(GRID[0])])
+        self.flower = np.clip(flower, self.min_position, self.max_position)
+    
+    def _compute_fov(self):
+        dir_ = self.positions[0] - self.flower
+        # dir_ = dir_ / np.linalg.norm(dir_) # to unit vector
+        dir_ = self.directions[np.argmin(cdist([dir_],self.directions),1)] 
+        return dir_
+    
     def _compute_state(self):
-        state = np.zeros([self.n_agents] + GRID)
+        coords = np.zeros([self.n_agents] + GRID)
         for idx, pos in enumerate(self.positions):
-            state[(idx,pos[0], pos[1])] = 1
-        self.state = np.squeeze(state)
+            coords[(idx,pos[0], pos[1])] = 1
+        coords = np.reshape(coords, (self.n_agents, -1))
+        state = []
+        if self.fov:
+            fov = self._compute_fov()[0]
+            self.fov_buffer.append(fov)
+            self.fov_buffer.pop(0)
+            state.append(np.hstack((coords[0],fov)))
+        else:
+            state.append(coords[0])
+        if self.n_agents > 1 and self.enable_signaling:
+            for agent_coord in coords[1:]:
+                vec = np.hstack((agent_coord, np.array(self.fov_buffer).flatten()))
+                state.append(vec)
+        if self.n_agents == 1:
+            state = np.array(state)
+        self.state = state
         
     def reset(self):
         self.positions = np.array([HIVE for i in range(self.n_agents)])
         self.pollen = np.array([False] * self.n_agents)
         self.t = 0
+        if self.fov:
+            self._place_flower()
         self._compute_state()
+        
         if self.logging:
             self.log = []
         return self.state
@@ -67,7 +107,7 @@ class BeeEnv(gym.Env, EzPickle):
         # if (not np.isin(action, np.arange(8))):
         #     print('Error: The argument A must be an integer from 0-7, indicating which action was selected.')
         self.positions += self.directions[action]
-        self.positions = np.clip(self.positions, self.min_position, self.max_position -1)
+        self.positions = np.clip(self.positions, self.min_position, self.max_position)
 
         self.pollen[(self.positions[:, 0] == self.flower[0]) & (self.positions[:, 1] == self.flower[1])] = True
         done = self.pollen.all() or self.t == self._max_episode_steps
