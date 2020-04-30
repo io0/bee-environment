@@ -118,6 +118,7 @@ class BeeEnv(gym.Env, EzPickle):
     def reset(self):
         self.positions = np.array([HIVE for i in range(self.n_agents)])
         self.pollen = np.array([False] * self.n_agents)
+        self.n_pollen = 0
         self.communication_vec = np.zeros((self.n_agents, self.n_frames * 2))
         self.is_signaling = False
         self.t = 0
@@ -142,9 +143,10 @@ class BeeEnv(gym.Env, EzPickle):
         self.is_signaling = action[0] > self.n_movements #np.where(action > self.n_movements)
         self.pollen[(self.positions[:, 0] == self.flower[0]) & (self.positions[:, 1] == self.flower[1])] = True
         done = self.pollen.all() or self.t == self._max_episode_steps
-        reward = -1
-        if done:
-            reward = len(np.where(self.pollen)) * 10 
+        reward = (len(np.where(self.pollen)) - self.n_pollen) * 10 -1
+        self.n_pollen = len(np.where(self.pollen))
+        # if done:
+        #     reward = len(np.where(self.pollen)) * 10 
         if self.logging:
             self.log.append(self.positions.copy())
         self.t += 1
