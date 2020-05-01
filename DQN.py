@@ -27,7 +27,7 @@ env = BeeEnv(n_agents=1, max_episode_steps=1000)
 l1 = env.state.size
 l2 = 150
 l3 = 100
-l4 = 5
+l4 = env.action_space[0].n
 model = torch.nn.Sequential(
  torch.nn.Linear(l1, l2),
  torch.nn.ReLU(),
@@ -65,7 +65,7 @@ for i in range(epochs):
         if (random.random() < epsilon):
             action = env.action_space_sample()
         else:
-            action = (np.argmax(qval_))
+            action = [np.argmax(qval_)]
         
         next_state_, reward, done, _ = env.step(action)
         next_state_ = next_state_ + np.random.rand(1,l1)/10.0
