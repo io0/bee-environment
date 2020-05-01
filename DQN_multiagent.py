@@ -52,7 +52,7 @@ gamma = 0.99
 epsilon = 0.3
 
 epochs = 400
-losses = [[]] * len(models)
+losses = [[] for i in range(len(models))]
 paths = []
 flowers = []
 stats = RunStats(
@@ -121,7 +121,7 @@ for i in range(epochs):
         paths.append(env.log)
         flowers.append(env.flower)
     
-    print(i, loss.item(), t)
+    print(i, np.array(losses)[:,-1], t)
     if epsilon > 0.1:
         epsilon -= (1/epochs)
 def timestring():
@@ -152,16 +152,18 @@ moving_average(stats)
 loss_curve(losses)
 
 def plot_paths(paths, flowers, idx=None):
-    plt.figure()
+    n_paths = 4
     if idx is None:
-        idx = int(len(paths)/10) - 1
-    flowers = flowers[idx*10:(idx+1)*10]
-    trace = paths[idx*10:(idx+1)*10]
+        idx = int(len(paths)/n_paths) - 1
+    flowers = flowers[idx*n_paths:(idx+1)*n_paths]
+    trace = paths[idx*n_paths:(idx+1)*n_paths]
     for path, flower in zip(trace, flowers):
-        r = np.array(path).squeeze()
-        plt.plot(r[:,0], r[:,1])
-        plt.scatter(flower[0], flower[1])
-    plt.savefig(fname=timestring() + "path_" + str(idx))
+        plt.figure()
+        for i in range(2):
+            r = np.array(path)
+            plt.plot(r[:,i, 0], r[:,i, 1])
+            plt.scatter(flower[0], flower[1])
+        plt.savefig(fname=timestring() + "path_" + str(idx))
         
 plot_paths(paths, flowers)
 plot_paths(paths, flowers, idx=0)
